@@ -10,6 +10,7 @@ system_memory_usage_gauge = Gauge('system_memory_usage_percent', 'Percentage of 
 system_cpu_usage_gauge = Gauge('system_cpu_usage_percent', 'Percentage of CPU used in the system')
 process_cpu_usage_gauge = Gauge('process_cpu_usage', 'CPU Usage of a specific process', ['process_name'])
 process_memory_usage_gauge = Gauge('process_memory_usage', 'Memory Usage of a specific process in MB', ['process_name'])
+process_memory_percentage_usage_gauge = Gauge('process_memory_percentage_usage', 'Percentage of Memory Usage of a specific process', ['process_name'])
 
 def find_process_by_name(name):
     for proc in psutil.process_iter(['pid', 'name', 'exe', 'cpu_percent', 'memory_info']):
@@ -63,13 +64,14 @@ if __name__ == '__main__':
                 pid = str(process.info['pid'])
                 process_cpu_usage = process.info['cpu_percent']
                 process_memory_usage = process.info['memory_info'].rss / (1024 * 1024)  # Convert bytes to MB
-                process_memory_usage_percentage = total_memory/process_memory_usage * 100
-                process_cpu_usage_gauge.labels(process_name=process_name).set(process_memory_usage_percentage)
+                process_memory_usage_percentage = process_memory_usage/total_memory * 100
+                process_cpu_usage_gauge.labels(process_name=process_name).set(process_cpu_usage)
                 process_memory_usage_gauge.labels(process_name=process_name).set(process_memory_usage)
+                process_memory_percentage_usage_gauge.labels(process_name=process_name).set(process_memory_usage_percentage)
 
-                print(f"{'System Specification:':<30} Memory: {total_memory:.2f} MB {'':<3}   | System CPU Cores: {total_cores}")
-                print(f"{'System Usage:':<30} Memory Usage: {memory_usage}%  {'':<3}  | CPU Usage: {cpu_usage}%")
-                print(f"{'Process ' + process_name + ':('+ pid +')':<30} Memory Usage: {process_memory_usage:.2f} MB {'':<3}| CPU Usage: {process_cpu_usage}%\n")
+                print(f"{'System Specification:':<30} Memory: {total_memory:.2f} MB {'':<12}   | System CPU Cores: {total_cores}")
+                print(f"{'System Usage:':<30} Memory Usage: {memory_usage}%  {'':<12}  | CPU Usage: {cpu_usage}%")
+                print(f"{'Process ' + process_name + ':('+ pid +')':<30} Memory Usage: {process_memory_usage:.2f} MB ({process_memory_usage_percentage:.2f}%) {'':<3} | CPU Usage: {process_cpu_usage}%\n")
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 print(f"Process {process_name} not found or access denied.")
         else:
