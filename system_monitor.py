@@ -114,7 +114,7 @@ if __name__ == '__main__':
                         net_io_recv_guage.set(bytes_recv_kb)
 
                     # Print the network I/O stats
-                    print(f"\t{iface+':':<25} {bytes_sent_kb:.2f} KB/s sent {'':<25} | {bytes_recv_kb:<.2f} KB/s received")
+                    print(f"\t{iface}: {bytes_sent_kb:.2f} {'KB/s sent':<} | {bytes_recv_kb:<.2f} KB/s received")
 
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 print(f"Process {process_name} not found or access denied.")
