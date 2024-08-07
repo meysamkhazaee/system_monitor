@@ -89,7 +89,7 @@ if __name__ == '__main__':
                 print("\n============================================================================================")
                 print(f"{'System Specification:':<30} Memory: {total_memory:.2f} MB {'':<12}   | System CPU Cores: {total_cores}")
                 print(f"{'System Usage:':<30} Memory Usage: {memory_usage:.2f}%  {'':<12} | CPU Usage: {cpu_usage:.2f}%")
-                print(f"{process_name + ':(pid = '+ pid +')':<30} Memory Usage: {process_memory_usage:.2f} MB ({process_memory_usage_percentage:.2f}%) {'':<3} | CPU Usage: {process_cpu_usage:.2f}%")
+                print(f"{process_name + ':(pid = '+ pid +')':<30} Memory Usage: {process_memory_usage:.2f} MB ({process_memory_usage_percentage:.2f}%) {'':<3}  | CPU Usage: {process_cpu_usage:.2f}%")
                 print("Network(i/o):")
                 
                 # Loop through each network interface
@@ -112,9 +112,9 @@ if __name__ == '__main__':
                     if iface == "enp2s0":
                         net_io_sent_guage.set(bytes_sent_kb)
                         net_io_recv_guage.set(bytes_recv_kb)
+
                     # Print the network I/O stats
-                    # print(f"\t{iface}: {'':<10} {bytes_sent_kb:.2f} KB/s sent {'':<10}| {bytes_recv_kb:.2f} KB/s received")
-                    print(f"\t{iface}: {bytes_sent_kb:.2f} KB/s sent, {bytes_recv_kb:.2f} KB/s received")
+                    print(f"\t{iface+':':<25} {bytes_sent_kb:.2f} KB/s sent {'':<25} | {bytes_recv_kb:<.2f} KB/s received")
 
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 print(f"Process {process_name} not found or access denied.")
