@@ -1,13 +1,35 @@
 import logging
-import coloredlogs
+import colorlog
 
-coloredlogs.install()
-# logging.basicConfig(format='%(asctime)s %(lineno)d %(levelname)s:%(message)s', level=logging.DEBUG)
-logging.basicConfig(format='%(levelname)-8s %(asctime)s [%(filename)s:%(lineno)d] %(message)s', level=logging.DEBUG)
+# Create a logger object
 logger = logging.getLogger(__name__)
 
-# logger = logging.getLogger(__name__)
-# handler = logging.StreamHandler()
-# handler.setFormatter(logging.Formatter('%(levelname)-8s %(asctime)s [%(filename)s:%(lineno)d] %(message)s'))
-# # logger.setLevel(config['logger']['level'].upper())
-# logger.addHandler(handler)
+# Define a log format for colorlog
+log_format = (
+    '%(log_color)s%(levelname)-8s%(reset)s %(asctime)s [%(filename)s:%(lineno)d] %(message)s'
+)
+
+# Create a colorlog formatter using the log format
+formatter = colorlog.ColoredFormatter(
+    log_format,
+    datefmt='%Y-%m-%d %H:%M:%S',
+    log_colors={
+        'DEBUG':    'cyan',
+        'INFO':     'green',
+        'WARNING':  'yellow',
+        'ERROR':    'red',
+        'CRITICAL': 'bold_red',
+    }
+)
+
+# Create a stream handler
+handler = logging.StreamHandler()
+
+# Set the formatter for the handler
+handler.setFormatter(formatter)
+
+# Add the handler to the logger
+logger.addHandler(handler)
+
+# Set the logging level (default to DEBUG, but can be changed)
+logger.setLevel(logging.DEBUG)
