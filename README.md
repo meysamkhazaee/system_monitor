@@ -1,2 +1,2 @@
 # system_monitor
-monitor specific executable system usage(memory and cpu)
+expose resource usage of system and specific executable(memory, cpu and network)
