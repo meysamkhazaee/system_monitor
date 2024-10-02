@@ -1,0 +1,10 @@
+usage: main.py [-h] [process_name] [port]
+
+expose system and process memory and cpu usage using Prometheus
+
+positional arguments:
+  process_name  Name of the process to monitor
+  port          Port number to push prometheus metrics
+
+options:
+  -h, --help    show this help message and exit
