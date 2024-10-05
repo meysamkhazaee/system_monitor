@@ -65,11 +65,11 @@ if __name__ == '__main__':
 
     # Get inputs from command line or prompt user if not provided
     process_name = args.process_name or input(f"Enter process name (or press Enter to ignore process monitoring): ") or None
-    port = args.port or int(input(f"Enter server IP (default: {default_expose_port}): ")) or default_expose_port
+    port = args.port or input(f"Enter server IP (default: {default_expose_port}): ") or default_expose_port
 
     args = parse_args()
 
-    start_http_server(port)
+    start_http_server(int(port))
 
     try:
         host_ip = socket.gethostbyname(socket.gethostname())
