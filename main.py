@@ -5,6 +5,8 @@ import argparse
 import socket
 from logger import logger
 
+# mshadow: todo: add option to monitor multiple process
+
 def parse_args():
     parser = argparse.ArgumentParser(description='expose system and process memory and cpu usage using Prometheus')
     parser.add_argument('process_name', nargs="?", help='Name of the process to monitor')
