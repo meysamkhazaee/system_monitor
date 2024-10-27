@@ -7,8 +7,8 @@ from logger import logger
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Expose system and process memory and CPU usage using Prometheus')
-    parser.add_argument('pid', type=int, nargs="?", help='PID of the process to monitor')
-    parser.add_argument('port', type=int, nargs="?", default=9990, help='Port number to push metrics for Prometheus server (default: 9990)')
+    parser.add_argument('pids', type=int, nargs="?", help='PIDs of the processes to monitor')
+    parser.add_argument('port', type=int, nargs="?",help='Port number to push metrics for Prometheus server (default: 9990)')
     return parser.parse_args()
 
 # Define Prometheus Gauges for monitoring system and process CPU and Memory usage
@@ -24,12 +24,12 @@ net_io_recv_gauge = Gauge('net_io_recv', 'KiloBytes received over network', ['ne
 
 def find_process(pid):
     if pid == -1:
-        logger.info("no input process. the process monitoring is disable.")
+        logger.warning("no input process. the process monitoring is disable.")
         return None
     try:
         return psutil.Process(pid)
     except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-        logger.error("input process id not exist. the process monitoring is disable.")
+        logger.warning(f"Process with PID {pid} not found or access denied.")
         return None
 
 def get_system_info():
@@ -48,12 +48,11 @@ def get_system_usage():
 
 if __name__ == '__main__':
 
-    default_expose_port = 9990
     args = parse_args()
 
-    # Get inputs from command line or prompt user if not provided
-    pid = args.pid or int(input(f"Enter process PID (or press Enter to ignore process monitoring): ") or -1)
-    port = args.port or input(f"Enter server IP (default: {default_expose_port}): ") or default_expose_port
+    pids = args.pids or [int(pid) for pid in input("Enter processes PIDs (or press Enter to ignore processes monitoring): ").split() if pid.isdigit()] or [-1]
+
+    port = args.port or input(f"Enter prometheus client port (default: 9990): ") or 9990
 
     start_http_server(port)
 
@@ -75,30 +74,30 @@ if __name__ == '__main__':
         system_memory_usage_gauge.labels(host_info=host_ip).set(memory_usage)
         system_cpu_usage_gauge.labels(host_info=host_ip).set(cpu_usage)
 
-        process = find_process(pid)
+        logger.debug("\n============================================================================================")
+        logger.debug(f"{'System Specification:':<30} Memory: {total_memory:.2f} MB {'':<12}   | System CPU Cores: {total_cores}")
+        logger.debug(f"{'System Usage:':<30} Memory Usage: {memory_usage:.2f}%  {'':<12} | CPU Usage: {cpu_usage:.2f}%")
 
-        logger.info("\n============================================================================================")
-        logger.info(f"{'System Specification:':<30} Memory: {total_memory:.2f} MB {'':<12}   | System CPU Cores: {total_cores}")
-        logger.info(f"{'System Usage:':<30} Memory Usage: {memory_usage:.2f}%  {'':<12} | CPU Usage: {cpu_usage:.2f}%")
+        for pid in pids:
+            process = find_process(pid)
+            if process:
+                try:
+                    process_name = process.name()
+                    process_cpu_usage = process.cpu_percent(interval=1) / psutil.cpu_count()
+                    process_memory_usage = process.memory_info().rss / (1024 * 1024)  # Convert bytes to MB
+                    process_memory_usage_percentage = process_memory_usage / total_memory * 100
 
-        if process:
-            try:
-                process_name = process.name()
-                process_cpu_usage = process.cpu_percent(interval=1) / psutil.cpu_count()
-                process_memory_usage = process.memory_info().rss / (1024 * 1024)  # Convert bytes to MB
-                process_memory_usage_percentage = process_memory_usage / total_memory * 100
+                    # Update Prometheus Gauges with process metrics
+                    process_cpu_usage_gauge.labels(pid=pid).set(process_cpu_usage)
+                    process_memory_usage_gauge.labels(pid=pid).set(process_memory_usage)
+                    process_memory_percentage_usage_gauge.labels(pid=pid).set(process_memory_usage_percentage)
 
-                # Update Prometheus Gauges with process metrics
-                process_cpu_usage_gauge.labels(pid=pid).set(process_cpu_usage)
-                process_memory_usage_gauge.labels(pid=pid).set(process_memory_usage)
-                process_memory_percentage_usage_gauge.labels(pid=pid).set(process_memory_usage_percentage)
+                    logger.debug(f"{process_name + ' (pid=' + str(pid) + ')':<30} Memory Usage: {process_memory_usage:.2f} MB ({process_memory_usage_percentage:.2f}%)  | CPU Usage: {process_cpu_usage:.2f}%")
 
-                logger.info(f"{process_name + ' (pid=' + str(pid) + ')':<30} Memory Usage: {process_memory_usage:.2f} MB ({process_memory_usage_percentage:.2f}%)  | CPU Usage: {process_cpu_usage:.2f}%")
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    logger.warning(f"Process with PID {pid} not found or access denied.")
 
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                logger.info(f"Process with PID {pid} not found or access denied.")
-        
-        logger.info("Network(i/o):")
+        logger.debug("Network(i/o):")
         
         for iface in net_ifaces:
             io_stats = psutil.net_io_counters(pernic=True)[iface]
@@ -110,4 +109,6 @@ if __name__ == '__main__':
             bytes_recv_kb = bytes_recv / 1024
             net_io_sent_gauge.labels(network_interface=iface).set(bytes_sent_kb)
             net_io_recv_gauge.labels(network_interface=iface).set(bytes_recv_kb)
-            logger.info(f"\t{iface}: {bytes_sent_kb:.2f} KB/s sent | {bytes_recv_kb:.2f} KB/s received")
+            logger.debug(f"\t{iface}: {bytes_sent_kb:.2f} KB/s sent | {bytes_recv_kb:.2f} KB/s received")
+
+        time.sleep(1)  # Add a delay to avoid excessive CPU usage
