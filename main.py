@@ -6,27 +6,31 @@ import socket
 from logger import logger
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Expose system and process memory and CPU usage using Prometheus')
+    parser = argparse.ArgumentParser(description='Expose system and process memory, CPU, and disk usage using Prometheus')
     parser.add_argument('--pids', type=int, nargs="*", help='PIDs of the processes to monitor')
-    parser.add_argument('--port', type=int, nargs="?",help='Port number to push metrics for Prometheus server (default: 9990)')
+    parser.add_argument('--port', type=int, nargs="?", help='Port number to push metrics for Prometheus server (default: 9990)')
     return parser.parse_args()
 
-# Define Prometheus Gauges for monitoring system CPU, Memory, and Network usage
+# Define Prometheus Gauges for monitoring system CPU, Memory, Network, and Disk usage
 system_memory_volume_gauge = Gauge('system_memory_volume_mb', 'Total system memory volume in MB', ['host_info'])
 system_cpu_cores_gauge = Gauge('system_cpu_cores', 'Total number of CPU cores', ['host_info'])
 system_memory_usage_gauge = Gauge('system_memory_usage_percent', 'Percentage of memory used in the system', ['host_info'])
 system_cpu_usage_gauge = Gauge('system_cpu_usage_percent', 'Percentage of CPU used in the system', ['host_info'])
 net_io_sent_gauge = Gauge('net_io_sent', 'KiloBytes sent over network', ['host_info'])
 net_io_recv_gauge = Gauge('net_io_recv', 'KiloBytes received over network', ['host_info'])
+system_disk_read_gauge = Gauge('system_disk_read_kb', 'Total Disk read by the system in KB', ['host_info'])
+system_disk_write_gauge = Gauge('system_disk_write_kb', 'Total Disk write by the system in KB', ['host_info'])
 
-# Define Prometheus Gauges for monitoring process CPU, Memory, and Network usage
+# Define Prometheus Gauges for monitoring process CPU, Memory, Network, and Disk I/O usage
 process_cpu_usage_gauge = Gauge('process_cpu_usage', 'CPU Usage of a specific process', ['pid'])
 process_memory_usage_gauge = Gauge('process_memory_usage', 'Memory Usage of a specific process in MB', ['pid'])
 process_memory_percentage_usage_gauge = Gauge('process_memory_percentage_usage', 'Memory Usage Percentage of a specific process', ['pid'])
+process_disk_read_gauge = Gauge('process_disk_read_kb', 'Disk read by a specific process in KB', ['pid'])
+process_disk_write_gauge = Gauge('process_disk_write_kb', 'Disk write by a specific process in KB', ['pid'])
 
 def find_process(pid):
     if pid == -1:
-        logger.warning("no input process. the process monitoring is disable.")
+        logger.warning("No input process. The process monitoring is disabled.")
         return None
     try:
         return psutil.Process(pid)
@@ -45,14 +49,13 @@ def get_system_cpu_usage():
     return cpu_usage_percent
 
 def get_system_usage():
-    memory_usage_percent = psutil.virtual_memory().percent  # Memory usage in percentage    
+    memory_usage_percent = psutil.virtual_memory().percent  # Memory usage in percentage
     return memory_usage_percent, get_system_cpu_usage()
 
 if __name__ == '__main__':
-
     args = parse_args()
     pids = args.pids or [int(pid) for pid in input("Enter processes PIDs (or press Enter to ignore processes monitoring): ").split() if pid.isdigit()] or [-1]
-    port = args.port or input(f"Enter prometheus client port (default: 9990): ") or 9990
+    port = args.port or input(f"Enter Prometheus client port (default: 9990): ") or 9990
     start_http_server(port)
 
     try:
@@ -65,22 +68,26 @@ if __name__ == '__main__':
     system_cpu_cores_gauge.labels(host_info=host_ip).set(total_cores)
 
     net_io_stats = {'bytes_sent': 0, 'bytes_recv': 0}
-
+    
     while True:
         memory_usage, cpu_usage = get_system_usage()
         system_memory_usage_gauge.labels(host_info=host_ip).set(memory_usage)
         system_cpu_usage_gauge.labels(host_info=host_ip).set(cpu_usage)
 
-        logger.debug("")
-        logger.debug("============================ system monitoring ============================")
-        logger.debug("")
-        logger.debug(f"{'System Specification:':<30}")
-        logger.debug(f"Memory: {total_memory:.2f} MB {'':<12}   | System CPU Cores: {total_cores}")
-        logger.debug("")
-        logger.debug(f"{'System Usage:':<30} ")
-        logger.debug(f"Memory Usage: {memory_usage:.2f}%  {'':<12} | CPU Usage: {cpu_usage:.2f}%")
-        logger.debug("")
-        logger.debug("Network(i/o):")
+        disk_io = psutil.disk_io_counters()
+        disk_read = (disk_io.read_bytes) / (1024 * 1024)
+        disk_write = (disk_io.write_bytes) / (1024 * 1024)
+
+        system_disk_read_gauge.labels(host_info=host_ip).set(disk_read)
+        system_disk_write_gauge.labels(host_info=host_ip).set(disk_write)
+
+        logger.debug(f"============================ System Monitoring ============================")
+        logger.debug(f"")
+        logger.debug(f"System Specification:")
+        logger.debug(f"Memory: {total_memory:.2f} MB | CPU Cores: {total_cores}")
+        logger.debug(f"System Resource Usage: ")
+        logger.debug(f"Memory: {memory_usage:.2f}% | CPU: {cpu_usage:.2f}%")
+        logger.debug(f"Disk: {disk_read:.2f} MB Read | {disk_write:.2f} MB Write")
 
         bytes_sent = 0
         bytes_recv = 0
@@ -93,10 +100,11 @@ if __name__ == '__main__':
 
         net_io_sent_gauge.labels(host_info=host_ip).set(bytes_sent / 1024)
         net_io_recv_gauge.labels(host_info=host_ip).set(bytes_recv / 1024)
-        logger.debug(f"{bytes_sent / 1024:.2f} KB/s sent | {bytes_recv / 1024:.2f} KB/s received")
-        
-        logger.debug("")
-        logger.debug("************** process monitoring **************")
+        logger.debug(f"Network (I/O): {bytes_sent / 1024:.2f} KB/s sent | {bytes_recv / 1024:.2f} KB/s received")
+
+        logger.debug(f"")
+        logger.debug("************** Process Monitoring **************")
+        logger.debug(f"")
         for pid in pids:
             process = find_process(pid)
             if process:
@@ -106,18 +114,23 @@ if __name__ == '__main__':
                     process_memory_usage = process.memory_info().rss / (1024 * 1024)  # Convert bytes to MB
                     process_memory_usage_percentage = process_memory_usage / total_memory * 100
 
+                    # Process Disk I/O
+                    io_counters = process.io_counters()
+                    process_disk_read = io_counters.read_bytes / (1024 * 1024)  
+                    process_disk_write = io_counters.write_bytes / (1024 * 1024)
+
                     # Update Prometheus Gauges with process metrics
                     process_cpu_usage_gauge.labels(pid=pid).set(process_cpu_usage)
                     process_memory_usage_gauge.labels(pid=pid).set(process_memory_usage)
                     process_memory_percentage_usage_gauge.labels(pid=pid).set(process_memory_usage_percentage)
+                    process_disk_read_gauge.labels(pid=pid).set(process_disk_read)
+                    process_disk_write_gauge.labels(pid=pid).set(process_disk_write)
 
-                    logger.debug("")
-                    logger.debug(f"{process_name + ' (pid=' + str(pid) + ')':<30} Usage:") 
-                    logger.debug(f"Memory Usage: {process_memory_usage:.2f} MB ({process_memory_usage_percentage:.2f}%)  | CPU Usage: {process_cpu_usage:.2f}%")
+                    logger.debug(f"Process = {process_name} with PID={pid} Resource Usage:")
+                    logger.debug(f"Memory: {process_memory_usage:.2f} MB ({process_memory_usage_percentage:.2f}%) | CPU: {process_cpu_usage:.2f}%")
+                    logger.debug(f"Disk: {process_disk_read:.2f} MB read | {process_disk_write:.2f} MB write")
                     
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    logger.debug("")
                     logger.warning(f"Process with PID {pid} not found or access denied.")
-
-
+        
         time.sleep(1)  # Delay to avoid excessive CPU usage
