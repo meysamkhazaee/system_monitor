@@ -67,7 +67,7 @@ if __name__ == '__main__':
     system_memory_volume_gauge.labels(host_info=host_ip).set(total_memory)
     system_cpu_cores_gauge.labels(host_info=host_ip).set(total_cores)
 
-    net_io_stats = {'bytes_sent': 0, 'bytes_recv': 0}
+    prev_net_io = psutil.net_io_counters(pernic=True)
     
     while True:
         memory_usage, cpu_usage = get_system_usage()
@@ -80,6 +80,21 @@ if __name__ == '__main__':
 
         system_disk_read_gauge.labels(host_info=host_ip).set(disk_read)
         system_disk_write_gauge.labels(host_info=host_ip).set(disk_write)
+        
+        net_io = psutil.net_io_counters(pernic=True)
+
+        total_sent_kb = 0
+        total_recv_kb = 0
+        for iface, io_counters in net_io.items():
+            prev_io_counters = prev_net_io[iface]
+
+            total_sent_kb += ((io_counters.bytes_sent - prev_io_counters.bytes_sent) / 1024) 
+            total_recv_kb += ((io_counters.bytes_recv - prev_io_counters.bytes_recv) / 1024)
+
+        prev_net_io = net_io
+
+        net_io_sent_gauge.labels(host_info=host_ip).set(total_sent_kb)
+        net_io_recv_gauge.labels(host_info=host_ip).set(total_recv_kb)
 
         logger.debug(f"============================ System Monitoring ============================")
         logger.debug(f"")
@@ -88,19 +103,7 @@ if __name__ == '__main__':
         logger.debug(f"System Resource Usage: ")
         logger.debug(f"Memory: {memory_usage:.2f}% | CPU: {cpu_usage:.2f}%")
         logger.debug(f"Disk: {disk_read:.2f} MB Read | {disk_write:.2f} MB Write")
-
-        bytes_sent = 0
-        bytes_recv = 0
-        for iface, stats in psutil.net_io_counters(pernic=True).items():
-            bytes_sent += stats.bytes_sent
-            bytes_recv += stats.bytes_recv
-
-        net_io_stats['bytes_sent'] = bytes_sent - net_io_stats['bytes_sent']
-        net_io_stats['bytes_recv'] = bytes_recv - net_io_stats['bytes_recv']
-
-        net_io_sent_gauge.labels(host_info=host_ip).set(bytes_sent / 1024)
-        net_io_recv_gauge.labels(host_info=host_ip).set(bytes_recv / 1024)
-        logger.debug(f"Network (I/O): {bytes_sent / 1024:.2f} KB/s sent | {bytes_recv / 1024:.2f} KB/s received")
+        logger.debug(f"Network (I/O): {total_sent_kb:.2f} KB/s sent | {total_recv_kb / 1024:.2f} KB/s received")
 
         logger.debug(f"")
         logger.debug("************** Process Monitoring **************")
