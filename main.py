@@ -18,8 +18,8 @@ system_memory_usage_gauge = Gauge('system_memory_usage_percent', 'Percentage of 
 system_cpu_usage_gauge = Gauge('system_cpu_usage_percent', 'Percentage of CPU used in the system', ['host_info'])
 net_io_sent_gauge = Gauge('net_io_sent', 'KiloBytes sent over network', ['host_info'])
 net_io_recv_gauge = Gauge('net_io_recv', 'KiloBytes received over network', ['host_info'])
-system_disk_read_gauge = Gauge('system_disk_read_kb', 'Total Disk read by the system in KB', ['host_info'])
-system_disk_write_gauge = Gauge('system_disk_write_kb', 'Total Disk write by the system in KB', ['host_info'])
+system_disk_read_gauge = Gauge('system_disk_read_mb', 'Total Disk read by the system in KB', ['host_info'])
+system_disk_write_gauge = Gauge('system_disk_write_mb', 'Total Disk write by the system in KB', ['host_info'])
 
 # Define Prometheus Gauges for monitoring process CPU, Memory, Network, and Disk I/O usage
 process_cpu_usage_gauge = Gauge('process_cpu_usage', 'CPU Usage of a specific process', ['pid'])
@@ -68,18 +68,19 @@ if __name__ == '__main__':
     system_cpu_cores_gauge.labels(host_info=host_ip).set(total_cores)
 
     prev_net_io = psutil.net_io_counters(pernic=True)
-    
+    prev_disk_io = psutil.disk_io_counters()
+
     while True:
         memory_usage, cpu_usage = get_system_usage()
         system_memory_usage_gauge.labels(host_info=host_ip).set(memory_usage)
         system_cpu_usage_gauge.labels(host_info=host_ip).set(cpu_usage)
 
-        disk_io = psutil.disk_io_counters()
-        disk_read = (disk_io.read_bytes) / (1024 * 1024)
-        disk_write = (disk_io.write_bytes) / (1024 * 1024)
+        current_disk_io = psutil.disk_io_counters()
+        disk_read_rate = (current_disk_io.read_bytes - prev_disk_io.read_bytes) / (1024 * 1024)
+        disk_write_rate = (current_disk_io.write_bytes - prev_disk_io.write_bytes) / (1024 * 1024)
 
-        system_disk_read_gauge.labels(host_info=host_ip).set(disk_read)
-        system_disk_write_gauge.labels(host_info=host_ip).set(disk_write)
+        system_disk_read_gauge.labels(host_info=host_ip).set(disk_read_rate)
+        system_disk_write_gauge.labels(host_info=host_ip).set(disk_write_rate)
         
         net_io = psutil.net_io_counters(pernic=True)
 
@@ -102,7 +103,7 @@ if __name__ == '__main__':
         logger.debug(f"Memory: {total_memory:.2f} MB | CPU Cores: {total_cores}")
         logger.debug(f"System Resource Usage: ")
         logger.debug(f"Memory: {memory_usage:.2f}% | CPU: {cpu_usage:.2f}%")
-        logger.debug(f"Disk: {disk_read:.2f} MB Read | {disk_write:.2f} MB Write")
+        logger.debug(f"Disk: {disk_read_rate:.2f} MB Read | {disk_write_rate:.2f} MB Write")
         logger.debug(f"Network (I/O): {total_sent_kb:.2f} KB/s sent | {total_recv_kb / 1024:.2f} KB/s received")
 
         logger.debug(f"")
@@ -136,4 +137,4 @@ if __name__ == '__main__':
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     logger.warning(f"Process with PID {pid} not found or access denied.")
         
-        time.sleep(1)  # Delay to avoid excessive CPU usage
+        time.sleep(1)
