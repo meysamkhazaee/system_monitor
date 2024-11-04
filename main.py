@@ -55,7 +55,7 @@ def get_system_usage():
 if __name__ == '__main__':
     args = parse_args()
     pids = args.pids or [int(pid) for pid in input("Enter processes PIDs (or press Enter to ignore processes monitoring): ").split() if pid.isdigit()] or [-1]
-    port = args.port or input(f"Enter Prometheus client port (default: 9990): ") or 9990
+    port = args.port or int(input(f"Enter Prometheus client port (default: 9990): ")) or 9990
     start_http_server(port)
 
     try:
