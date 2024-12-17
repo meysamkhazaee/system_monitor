@@ -53,9 +53,28 @@ def get_system_usage():
     return memory_usage_percent, get_system_cpu_usage()
 
 if __name__ == '__main__':
-    args = parse_args()
-    pids = args.pids or [int(pid) for pid in input("Enter processes PIDs (or press Enter to ignore processes monitoring): ").split() if pid.isdigit()] or [-1]
-    port = args.port or int(input(f"Enter Prometheus client port (default: 9990): ")) or 9990
+
+    default_port = 9990
+
+    parser = argparse.ArgumentParser(description='Expose system and process memory, CPU, and disk usage using Prometheus')
+    parser.add_argument('--pids', type=int, nargs="*", help='PIDs of the processes to monitor(Multiple PIDs should be separate by space)', default=None)
+    parser.add_argument('--port', type=int, nargs="?", help='Port number to push metrics for Prometheus server', default=None)
+
+    args = parser.parse_args()
+
+    pids_list = args.pids or input("Enter processes PIDs (press Enter to ignore processes monitoring, Multiple PIDs should be separate by space): ").split()
+    for element in pids_list:
+        idx = pids_list.index(element)
+        if element.isdigit():
+            pids_list[idx] = int(element)
+
+    port = args.port or input(f"Enter Prometheus client port (default: {default_port}): ") or str(default_port)
+    try:
+        port = int(port)
+    except ValueError:
+        logger.error(f"Invalid port number. Using default port: {default_port}")
+        port = default_port
+
     start_http_server(port)
 
     try:
@@ -109,7 +128,7 @@ if __name__ == '__main__':
         logger.debug(f"")
         logger.debug("************** Process Monitoring **************")
         logger.debug(f"")
-        for pid in pids:
+        for pid in pids_list:
             process = find_process(pid)
             if process:
                 try:
