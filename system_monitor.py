@@ -5,6 +5,8 @@ import argparse
 import socket
 from logger import logger
 
+__version__ = "1.0.0"
+
 def parse_args():
     parser = argparse.ArgumentParser(description='Expose system and process memory, CPU, and disk usage using Prometheus')
     parser.add_argument('--pids', type=int, nargs="*", help='PIDs of the processes to monitor')
