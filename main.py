@@ -63,10 +63,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     pids_list = args.pids or input("Enter processes PIDs (press Enter to ignore processes monitoring, Multiple PIDs should be separate by space): ").split()
-    for element in pids_list:
-        idx = pids_list.index(element)
-        if element.isdigit():
-            pids_list[idx] = int(element)
+    for index, item in enumerate(pids_list):
+        pids_list[index] = int(item)
 
     port = args.port or input(f"Enter Prometheus client port (default: {default_port}): ") or str(default_port)
     try:
@@ -127,7 +125,6 @@ if __name__ == '__main__':
 
         logger.debug(f"")
         logger.debug("************** Process Monitoring **************")
-        logger.debug(f"")
         for pid in pids_list:
             process = find_process(pid)
             if process:
@@ -149,6 +146,7 @@ if __name__ == '__main__':
                     process_disk_read_gauge.labels(pid=pid).set(process_disk_read)
                     process_disk_write_gauge.labels(pid=pid).set(process_disk_write)
 
+                    logger.debug(f"")
                     logger.debug(f"Process = {process_name} with PID={pid} Resource Usage:")
                     logger.debug(f"Memory: {process_memory_usage:.2f} MB ({process_memory_usage_percentage:.2f}%) | CPU: {process_cpu_usage:.2f}%")
                     logger.debug(f"Disk: {process_disk_read:.2f} MB read | {process_disk_write:.2f} MB write")
