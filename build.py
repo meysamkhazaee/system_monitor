@@ -6,7 +6,7 @@ import system_monitor  # Import your script to access __version__
 version = system_monitor.__version__
 
 # Define the output executable name
-exe_name = f"system_monitor_{version}.exe"
+exe_name = f"system_monitor_{version}"
 
 # Build the command for pyinstaller
 command = [
