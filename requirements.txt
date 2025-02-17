@@ -1,4 +1,4 @@
 prometheus_client==0.20.0
 psutil==6.0.0
-colorlog==6.8.2
+termcolor==2.5.0
 pyinstaller==6.11.1

@@ -5,12 +5,13 @@ import argparse
 import socket
 from logger import logger
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Expose system and process memory, CPU, and disk usage using Prometheus')
-    parser.add_argument('--pids', type=int, nargs="*", help='PIDs of the processes to monitor')
-    parser.add_argument('--port', type=int, nargs="?", help='Port number to push metrics for Prometheus server (default: 9990)')
+    parser.add_argument('--pids', type=int, nargs="*", help='PIDs of the processes to monitor(Multiple PIDs should be separate by space)', default=None)
+    parser.add_argument('--port', type=int, nargs="?", help='Port number to push metrics for Prometheus server', default=None)
+    parser.add_argument("--log_level", type=str, help="Logging level (DEBUG, INFO, WARNING, ERROR, ...).", default="DEBUG")
     return parser.parse_args()
 
 # Define Prometheus Gauges for monitoring system CPU, Memory, Network, and Disk usage
@@ -54,34 +55,39 @@ def get_system_usage():
     memory_usage_percent = psutil.virtual_memory().percent  # Memory usage in percentage
     return memory_usage_percent, get_system_cpu_usage()
 
+def get_local_ip():
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        # Connect to an external address (Google's public DNS)
+        s.connect(("8.8.8.8", 80))
+        return s.getsockname()[0]
+    finally:
+        s.close()
+
 if __name__ == '__main__':
 
     default_port = 9990
-
-    parser = argparse.ArgumentParser(description='Expose system and process memory, CPU, and disk usage using Prometheus')
-    parser.add_argument('--pids', type=int, nargs="*", help='PIDs of the processes to monitor(Multiple PIDs should be separate by space)', default=None)
-    parser.add_argument('--port', type=int, nargs="?", help='Port number to push metrics for Prometheus server', default=None)
-
-    args = parser.parse_args()
+    default_log_level = 'info'
+    args = parse_args()
 
     pids_list = args.pids or input("Enter processes PIDs (press Enter to ignore processes monitoring, Multiple PIDs should be separate by space): ").split()
     for index, item in enumerate(pids_list):
         pids_list[index] = int(item)
 
     port = args.port or input(f"Enter Prometheus client port (default: {default_port}): ") or str(default_port)
+    log_level = args.log_level or default_log_level
+
+    logger_instance = logger("system_monitor_client", log_level=log_level.upper())
+
     try:
         port = int(port)
     except ValueError:
-        logger.error(f"Invalid port number. Using default port: {default_port}")
+        logger_instance.error(f"Invalid port number. Using default port: {default_port}")
         port = default_port
 
     start_http_server(port)
 
-    try:
-        host_ip = socket.gethostbyname(socket.gethostname())
-    except socket.gaierror:
-        host_ip = None
-
+    host_ip = get_local_ip()
     total_memory, total_cores = get_system_info()
     system_memory_volume_gauge.labels(host_info=host_ip).set(total_memory)
     system_cpu_cores_gauge.labels(host_info=host_ip).set(total_cores)
@@ -116,17 +122,17 @@ if __name__ == '__main__':
         net_io_sent_gauge.labels(host_info=host_ip).set(total_sent_kb)
         net_io_recv_gauge.labels(host_info=host_ip).set(total_recv_kb)
 
-        logger.debug(f"============================ System Monitoring ============================")
-        logger.debug(f"")
-        logger.debug(f"System Specification:")
-        logger.debug(f"Memory: {total_memory:.2f} MB | CPU Cores: {total_cores}")
-        logger.debug(f"System Resource Usage: ")
-        logger.debug(f"Memory: {memory_usage:.2f}% | CPU: {cpu_usage:.2f}%")
-        logger.debug(f"Disk: {disk_read_rate:.2f} MB Read | {disk_write_rate:.2f} MB Write")
-        logger.debug(f"Network (I/O): {total_sent_kb:.2f} KB/s sent | {total_recv_kb / 1024:.2f} KB/s received")
+        logger_instance.debug(f"============================ System Monitoring ============================")
+        logger_instance.debug(f"")
+        logger_instance.debug(f"System Specification (Host = {host_ip}):")
+        logger_instance.debug(f"Memory: {total_memory:.2f} MB | CPU Cores: {total_cores}")
+        logger_instance.debug(f"System Resource Usage: ")
+        logger_instance.debug(f"Memory: {memory_usage:.2f}% | CPU: {cpu_usage:.2f}%")
+        logger_instance.debug(f"Disk: {disk_read_rate:.2f} MB Read | {disk_write_rate:.2f} MB Write")
+        logger_instance.debug(f"Network (I/O): {total_sent_kb:.2f} KB/s sent | {total_recv_kb / 1024:.2f} KB/s received")
 
-        logger.debug(f"")
-        logger.debug("************** Process Monitoring **************")
+        logger_instance.debug(f"")
+        logger_instance.debug("************** Process Monitoring **************")
         for pid in pids_list:
             process = find_process(pid)
             if process:
@@ -148,12 +154,12 @@ if __name__ == '__main__':
                     process_disk_read_gauge.labels(pid=pid).set(process_disk_read)
                     process_disk_write_gauge.labels(pid=pid).set(process_disk_write)
 
-                    logger.debug(f"")
-                    logger.debug(f"Process = {process_name} with PID={pid} Resource Usage:")
-                    logger.debug(f"Memory: {process_memory_usage:.2f} MB ({process_memory_usage_percentage:.2f}%) | CPU: {process_cpu_usage:.2f}%")
-                    logger.debug(f"Disk: {process_disk_read:.2f} MB read | {process_disk_write:.2f} MB write")
-                    
+                    logger_instance.debug(f"")
+                    logger_instance.debug(f"Process = {process_name} with PID={pid} Resource Usage:")
+                    logger_instance.debug(f"Memory: {process_memory_usage:.2f} MB ({process_memory_usage_percentage:.2f}%) | CPU: {process_cpu_usage:.2f}%")
+                    logger_instance.debug(f"Disk: {process_disk_read:.2f} MB read | {process_disk_write:.2f} MB write")
+
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    logger.warning(f"Process with PID {pid} not found or access denied.")
+                    logger_instance.warning(f"Process with PID {pid} not found or access denied.")
         
         time.sleep(1)
